@@ -7,59 +7,56 @@
 #define VERSION_INFO "v0.1"
 
 
-#include <libgen.h>
 
 int
-file_writer(LightFS *fs, char* file_name, char* folderpath)
+file_writer(LightFS * fs, char *file_name, char *folderpath)
 {
-    FILE *fp = fopen(file_name, "rb");
-    if (!fp) {
-        perror("addfile failed");
-        return 1;
-    }
+	FILE           *fp = fopen(file_name, "rb");
+	if (!fp) {
+		perror("addfile failed");
+		return 1;
+	}
+	fseek(fp, 0, SEEK_END);
+	long 		size = ftell(fp);
+	rewind(fp);
 
-    fseek(fp, 0, SEEK_END);
-    long size = ftell(fp);
-    rewind(fp);
+	if (size <= 0) {
+		fclose(fp);
+		return 1;
+	}
+	unsigned char  *buf = malloc(size);
+	if (!buf) {
+		fclose(fp);
+		return 1;
+	}
+	fread(buf, 1, size, fp);
+	fclose(fp);
 
-    if (size <= 0) {
-        fclose(fp);
-        return 1;
-    }
+	char           *base = strrchr(file_name, '/');
+	base = base ? base + 1 : file_name;
 
-    unsigned char *buf = malloc(size);
-    if (!buf) {
-        fclose(fp);
-        return 1;
-    }
-
-    fread(buf, 1, size, fp);
-    fclose(fp);
-
-    char *base = strrchr(file_name, '/');
-    base = base ? base + 1 : file_name;
-
-    int parent_offset;
+	int 		parent_offset;
 	if (folderpath && strlen(folderpath) == 0)
-    	folderpath = NULL;
+		folderpath = NULL;
 
-    if (folderpath) {
+	if (folderpath) {
 
-        if (strcmp(folderpath, "/") == 0) {
-            parent_offset = 0;   // root
-        } else {
-            parent_offset =
-                lfs_doffset(fs, folderpath, fs->movement_parent);
-        }
+		if (strcmp(folderpath, "/") == 0) {
+			parent_offset = 0;
+			//root
+		} else {
+			parent_offset =
+				lfs_doffset(fs, folderpath, fs->movement_parent);
+		}
 
-    } else {
-        parent_offset = fs->movement_parent;
-    }
+	} else {
+		parent_offset = fs->movement_parent;
+	}
 
-    lfs_newfile(fs, base, buf, parent_offset);
+	lfs_newfile(fs, base, buf, parent_offset);
 
-    free(buf);
-    return 0;
+	free(buf);
+	return 0;
 }
 
 
@@ -123,6 +120,8 @@ main(int argc, char **argv)
 	}
 	fs.movement_parent = 0;
 	fs.old_parent = 0;
+
+	printf("DOFFSET: %d\n",);
 
 	int 		loop = 1;
 	while (loop) {
@@ -225,7 +224,10 @@ main(int argc, char **argv)
 		} else if (strcmp(command, "rmdir") == 0) {
 			char           *name = strtok(NULL, " ");
 			if (name) {
-				lfs_rmdir(&fs, name);
+				int 		offset = lfs_doffset(&fs, "liblightfss", fs.movement_parent);
+				if (offset != -1) {
+					lfs_rmdir(&fs, name);
+				}
 			} else {
 				printf("undefined folder\n");
 			}
