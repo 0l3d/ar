@@ -6,8 +6,6 @@
 
 #define VERSION_INFO "v0.1"
 
-
-
 int
 file_writer(LightFS * fs, char *file_name, char *folderpath)
 {
@@ -121,7 +119,6 @@ main(int argc, char **argv)
 	fs.movement_parent = 0;
 	fs.old_parent = 0;
 
-	printf("DOFFSET: %d\n",);
 
 	int 		loop = 1;
 	while (loop) {
