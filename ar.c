@@ -2,10 +2,106 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <dirent.h>
 
-#define IMG "fs.img"
+#define VERSION_INFO "v0.1"
 
-int 
+
+#include <libgen.h>
+
+int
+file_writer(LightFS *fs, char* file_name, char* folderpath)
+{
+    FILE *fp = fopen(file_name, "rb");
+    if (!fp) {
+        perror("addfile failed");
+        return 1;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    rewind(fp);
+
+    if (size <= 0) {
+        fclose(fp);
+        return 1;
+    }
+
+    unsigned char *buf = malloc(size);
+    if (!buf) {
+        fclose(fp);
+        return 1;
+    }
+
+    fread(buf, 1, size, fp);
+    fclose(fp);
+
+    char *base = strrchr(file_name, '/');
+    base = base ? base + 1 : file_name;
+
+    int parent_offset;
+	if (folderpath && strlen(folderpath) == 0)
+    	folderpath = NULL;
+
+    if (folderpath) {
+
+        if (strcmp(folderpath, "/") == 0) {
+            parent_offset = 0;   // root
+        } else {
+            parent_offset =
+                lfs_doffset(fs, folderpath, fs->movement_parent);
+        }
+
+    } else {
+        parent_offset = fs->movement_parent;
+    }
+
+    lfs_newfile(fs, base, buf, parent_offset);
+
+    free(buf);
+    return 0;
+}
+
+
+
+//DIRENT OUTPUT
+// TYPE 8->FILE
+// TYPE 4->FOLDER
+void
+folder_file_handler(LightFS * fs, char *folderpath, int offset)
+{
+	lfs_newdir(fs, folderpath, offset);
+
+	DIR            *dirp = opendir(folderpath);
+	if (!dirp) {
+		perror("opendir");
+		return;
+	}
+	struct dirent  *dp;
+	while ((dp = readdir(dirp)) != NULL) {
+
+		if (strcmp(dp->d_name, ".") == 0 ||
+		    strcmp(dp->d_name, "..") == 0)
+			continue;
+
+		char 		path     [1024];
+		snprintf(path, sizeof(path), "%s/%s",
+			 folderpath, dp->d_name);
+		if (dp->d_type == DT_DIR) {
+			folder_file_handler(
+					    fs,
+					    path,
+					 lfs_doffset(fs, folderpath, offset)
+				);
+		} else {
+			file_writer(fs, path, folderpath);
+		}
+	}
+
+	closedir(dirp);
+}
+
+int
 main(int argc, char **argv)
 {
 	LightFS 	fs;
@@ -21,7 +117,7 @@ main(int argc, char **argv)
 	if (!fs.img) {
 		fs.img = fopen(argv[1], "w+b");
 		if (!fs.img) {
-			perror("Failed to open LightFS image");
+			perror("Failed to open LightFS image.");
 			return 1;
 		}
 	}
@@ -67,77 +163,23 @@ main(int argc, char **argv)
 				perror("strdup");
 				return 1;
 			}
-			FILE           *fp = fopen(file_name, "rb");
-			if (fp == NULL) {
-				perror("addfile failed");
-				free(file_name);
-				return 1;
-			}
-			fseek(fp, 0, SEEK_END);
-			long 		size = ftell(fp);
-			rewind(fp);
-
-			if (size <= 0) {
-				fclose(fp);
-				free(file_name);
-				return 1;
-			}
-			unsigned char  *buf = malloc(size);
-			if (!buf) {
-				perror("malloc");
-				fclose(fp);
-				free(file_name);
-				return 1;
-			}
-			fread(buf, 1, size, fp);
-			fclose(fp);
 			char           *folderpath = NULL;
 			token = strtok(NULL, " ");
 			if (token) {
 				folderpath = strdup(token);
 				if (!folderpath) {
 					perror("strdup");
-					free(buf);
 					free(file_name);
 					return 1;
 				}
 			}
-			char           *end_foldername = NULL;
+			file_writer(&fs, file_name, folderpath);
 
-			if (folderpath && strchr(folderpath, '/')) {
-				char           *tmp = strdup(folderpath);
-				if (!tmp) {
-					perror("strdup");
-					free(folderpath);
-					free(buf);
-					free(file_name);
-					return 1;
-				}
-				char           *t = strtok(tmp, "/");
-				char           *last = NULL;
-				while (t) {
-					last = t;
-					t = strtok(NULL, "/");
-				}
-				if (last)
-					end_foldername = strdup(last);
-				lfs_go_path(&fs, folderpath);
-				lfs_cd(&fs, "..");
-
-				free(tmp);
-			}
-			lfs_newfile(
-				    &fs,
-				    file_name,
-				    buf,
-				    lfs_doffset(&fs,
-			       end_foldername ? end_foldername : folderpath,
-						fs.movement_parent
-						)
-				);
 			free(folderpath);
-			free(end_foldername);
 			free(file_name);
+		} else if (strcmp(command, "addfolder") == 0) {
+			char           *folderpath = strtok(NULL, " ");
+			folder_file_handler(&fs, folderpath, fs.movement_parent);
 		} else if (strcmp(command, "exit") == 0) {
 			loop = 0;
 		} else if (strcmp(command, "cd") == 0) {
