@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #define VERSION_INFO "v0.1"
 
@@ -96,6 +98,55 @@ folder_file_handler(LightFS * fs, char *folderpath, int offset)
 	closedir(dirp);
 }
 
+void 
+file_extracter(LightFS * fs, char *name, int parent_offset)
+{
+	char           *out;
+	size_t 		size;
+	lfs_cat(fs, name, parent_offset, &out, &size);
+
+	FILE           *file = fopen(name, "wb");
+	if (!file) {
+		perror("file extracter fopen error");
+		return;
+	}
+	fwrite(out, 1, size, file);
+
+	fclose(file);
+
+	free(out);
+
+}
+
+
+void 
+fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
+{
+
+	int 		dofset = lfs_doffset(fs, name, parent_offset);
+	int 		fofset = lfs_foffset(fs, name, parent_offset);
+	if (dofset != -1) {
+		mkdir(name, 0755);
+		lfs_cd(fs, name);
+		chdir(name);
+	}
+	ListFF 		f;
+	lfs_list(fs, &f);
+	for (int i = 0; i < f.filescount; i++) {
+		file_extracter(fs, f.file[i]->name, parent_offset);
+		if (fofset != -1) break;
+	}
+	for (int i = 0; i < f.folderscount; i++) {
+		if (fofset != -1)
+			break;
+		mkdir(f.dir[i]->name, 0755);
+		chdir(f.dir[i]->name);
+		fs_file_folder_handler(fs, f.dir[i]->name, parent_offset);
+	}
+	lfs_free_list(&f);
+
+}
+
 int
 main(int argc, char **argv)
 {
@@ -176,6 +227,9 @@ main(int argc, char **argv)
 		} else if (strcmp(command, "addfolder") == 0) {
 			char           *folderpath = strtok(NULL, " ");
 			folder_file_handler(&fs, folderpath, fs.movement_parent);
+		} else if (strcmp(command, "extract") == 0) {
+			char           *item_name = strtok(NULL, " ");
+			fs_file_folder_handler(&fs, item_name, fs.movement_parent);
 		} else if (strcmp(command, "exit") == 0) {
 			loop = 0;
 		} else if (strcmp(command, "cd") == 0) {
@@ -191,8 +245,9 @@ main(int argc, char **argv)
 			char           *file = strtok(NULL, " ");
 			if (file) {
 				char           *out;
-				lfs_cat(&fs, file, fs.movement_parent, &out);
-				printf("%s\n", out);
+				size_t 		size;
+				lfs_cat(&fs, file, fs.movement_parent, &out, &size);
+				printf("%s\nSIZE (bytes): %lu\n", out, size);
 				free(out);
 			} else {
 				printf("undefined file\n");

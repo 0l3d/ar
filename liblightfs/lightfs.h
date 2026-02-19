@@ -5,6 +5,7 @@
  *
  * Licensed under the GNU General Public License v3 (GPL-3.0)
  */
+
 #ifndef DEFINE_LIGHTFS
 #define DEFINE_LIGHTFS
 
@@ -74,7 +75,7 @@ void 		lfs_cd   (LightFS * fs, char *name);
 void 		lfs_pwd  (LightFS * fs, char *out);
 void 		lfs_go_path(LightFS * fs, char *path);
 
-void 		lfs_cat  (LightFS * fs, const char *filename, int parent_offset, char **out);
+void 		lfs_cat  (LightFS * fs, const char *filename, int parent_offset, char **out, size_t *size);
 
 void 		lfs_rm   (LightFS * fs, char *name);
 void 		lfs_rmdir(LightFS * fs, char *name);
