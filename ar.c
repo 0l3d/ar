@@ -53,7 +53,7 @@ file_writer(LightFS * fs, char *file_name, char *folderpath)
 		parent_offset = fs->movement_parent;
 	}
 
-	lfs_newfile(fs, base, buf, parent_offset);
+	lfs_newfile(fs, base, buf, size, parent_offset);
 
 	free(buf);
 	return 0;
@@ -110,6 +110,9 @@ file_extracter(LightFS * fs, char *name, int parent_offset)
 		perror("file extracter fopen error");
 		return;
 	}
+	
+	printf("extracting %s, size = %lu\n", name, size);
+	
 	fwrite(out, 1, size, file);
 
 	fclose(file);
@@ -122,7 +125,7 @@ file_extracter(LightFS * fs, char *name, int parent_offset)
 void 
 fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
 {
-
+	int curr_off = fs->movement_parent;
 	int 		dofset = lfs_doffset(fs, name, parent_offset);
 	int 		fofset = lfs_foffset(fs, name, parent_offset);
 	if (dofset != -1) {
@@ -133,18 +136,16 @@ fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
 	ListFF 		f;
 	lfs_list(fs, &f);
 	for (int i = 0; i < f.filescount; i++) {
-		file_extracter(fs, f.file[i]->name, parent_offset);
+		file_extracter(fs, f.file[i]->name, fs->movement_parent);
 		if (fofset != -1) break;
 	}
 	for (int i = 0; i < f.folderscount; i++) {
 		if (fofset != -1)
 			break;
-		mkdir(f.dir[i]->name, 0755);
-		chdir(f.dir[i]->name);
-		fs_file_folder_handler(fs, f.dir[i]->name, parent_offset);
+		fs_file_folder_handler(fs, f.dir[i]->name, fs->movement_parent);
 	}
 	lfs_free_list(&f);
-
+	fs->movement_parent = curr_off;
 }
 
 int
@@ -269,7 +270,7 @@ main(int argc, char **argv)
 					strcat(buffer, " ");
 					datapart = strtok(NULL, " ");
 				}
-				lfs_newfile(&fs, name, buffer, fs.movement_parent);
+				lfs_newfile(&fs, name, buffer, strlen(buffer), fs.movement_parent);
 			} else {
 				printf("undefined file or data\n");
 			}
