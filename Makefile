@@ -1,4 +1,4 @@
-CC      = clang
+CC      = cc
 TARGET  = ar
 
 SOURCES = ./ar.c \
