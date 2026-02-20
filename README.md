@@ -27,8 +27,8 @@ make
 - CLI Support like TAR.  
 - Extended unix-like command support.  
   
-# Differences From [mult](https//git.sr.ht/~oled/mult)
-**mult** is structurally complex and comparatively more problematic due to its layered and tightlt coupled internal design, whereas **AR** is simpler, lightfs-based and stable.  
+# Differences From mult
+**[mult](https://git.sr.ht/~oled/mult)** is structurally complex and comparatively more problematic due to its layered and tightlt coupled internal design, whereas **AR** is simpler, lightfs-based and stable.  
   
 
 # Author 
