@@ -8,7 +8,20 @@
 
 #define VERSION_INFO "v0.1"
 
-int
+#define HELP_MESSAGE "AR archive manager for .arx. \n" \
+					 "Usage: ar [options][options arguments] <file>.arx.<compression algorithm>\n" \
+					 "-v	version info \n" \
+					 "-h 	help message \n" \
+					 "-e	extract \n" \
+					 "-c	create archive from folder \n" \
+					 "-x	compress with xz or decompress on extract (.xz)\n" \
+					 "-g	compress with gzip or decompress on extract (.gz)\n" \
+					 "-l	compress with lz4 or decompress on extract (.lz4)\n" \
+					 "-n	*Navigate inside of archive with unix-like commands\n\n" \
+					 "For compressed files, specify the algorithm.\n" \
+					 "For example for extract: ar -ex test.arx.xz OR ar -eg test.arx.gz\nFor example for create: ar -xc files test.arx # out: test.arx.xz \n"  
+
+	int
 file_writer(LightFS * fs, char *file_name, char *folderpath)
 {
 	FILE           *fp = fopen(file_name, "rb");
@@ -126,8 +139,8 @@ void
 fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
 {
 	int curr_off = fs->movement_parent;
-	int 		dofset = lfs_doffset(fs, name, parent_offset);
-	int 		fofset = lfs_foffset(fs, name, parent_offset);
+	 	int 	dofset = lfs_doffset(fs, name, parent_offset);
+	 		int fofset = lfs_foffset(fs, name, parent_offset);
 	if (dofset != -1) {
 		mkdir(name, 0755);
 		lfs_cd(fs, name);
@@ -148,30 +161,92 @@ fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
 	fs->movement_parent = curr_off;
 }
 
+void cli_extracter(LightFS *fs, int parent_offset) {
+	fs->movement_parent = parent_offset;
+	ListFF 		f;
+	lfs_list(fs, &f);
+	for (int i = 0; i < f.filescount; i++) {
+		file_extracter(fs, f.file[i]->name, fs->movement_parent);
+	}
+	for (int i = 0; i < f.folderscount; i++) {
+		lfs_cd(fs, f.dir[i]->name);
+		mkdir(f.dir[i]->name, 0755);
+		chdir(f.dir[i]->name);
+		cli_extracter(fs, f.dir[i]->meta.offset);
+	}
+	lfs_free_list(&f);
+}
+
 int
 main(int argc, char **argv)
 {
 	LightFS 	fs;
+	
+	if (argc < 1) {
+		fprintf(stderr, "AR Needs arguments, -h for help.");
+		return 1;
+	}
+	
+	int ch, nav = 0, cre = 0, exr = 0, gzip = 0, xz = 0, lz4 = 0;
+	char *cre_folders = NULL;
 
-	if (argv[1]) {
-		char           *dot = strrchr(argv[1], '.');
-		if (!dot || strcmp(dot + 1, "arx") != 0) {
-			printf("This file isn't an AR file.\n");
-			return 1;
+	while ((ch = getopt(argc, argv, "vhgxlenc:")) != -1) {
+		switch (ch) {
+		case 'h':
+			printf("%s", HELP_MESSAGE);
+			return 0;
+			break;
+		case 'v':
+			printf("ar version is %s\n", VERSION_INFO);
+			return 0;
+			break;
+		case 'n':
+			nav = 1;
+			break;
+		case 'g':
+			gzip = 1;
+			break;
+		case 'x':
+			xz = 1; 
+			break;
+		case 'l':
+			lz4 = 1;
+			break;
+		case 'e':
+			exr = 1;
+			break;
+		case 'c':
+			cre = 1;
+			cre_folders = strdup(optarg);
+			break;
+		default:
+			break;
 		}
 	}
-	fs.img = fopen(argv[1], "r+b");
+	
+	if (optind >= argc) {
+		fprintf(stderr, "-h for help.");
+		return 1;
+	}
+	
+	char *file = argv[optind];
+
+	fs.movement_parent = 0;
+	fs.old_parent = 0;
+	if (!file) {
+		printf("-h for help.\n");
+		return 1;
+	}
+	fs.img = fopen(file, "r+b");
 	if (!fs.img) {
-		fs.img = fopen(argv[1], "w+b");
+		fs.img = fopen(file, "w+b");
 		if (!fs.img) {
 			perror("Failed to open LightFS image.");
 			return 1;
 		}
 	}
-	fs.movement_parent = 0;
-	fs.old_parent = 0;
 
-
+	if (nav == 1 && exr != 1 && cre != 1) {
 	int 		loop = 1;
 	while (loop) {
 		char 		pwdout   [256];
@@ -294,6 +369,80 @@ main(int argc, char **argv)
 		} else {
 			printf("unrecognized command: %s\n", command);
 		}
+	}
+	}
+	
+	if (nav != 1 && exr == 1) {
+		printf("extracting...\n");
+		if (gzip == 1) {
+			int size = strlen("gzip ") + strlen(" -d ") + strlen(file);
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "gzip -d %s", file);
+			system(full_command);
+			free(full_command);
+		} 
+		else if (xz == 1) {
+			int size = strlen("xz ") + strlen(" -d ") + strlen(file);
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "xz -d %s", file);
+			system(full_command);
+			free(full_command);
+
+		} 
+		else if (lz4 == 1) {
+			int size = strlen("lz4 ") + strlen(" -d ") + strlen(file);
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "lz4 -d %s", file);
+			system(full_command);
+			free(full_command);
+
+		}
+		cli_extracter(&fs, 0);
+	}
+	
+	if (nav != 1 && exr != 1 && cre == 1) {
+		printf("creating archive...\n");
+		if (!cre_folders) {
+			printf("-h for help.");
+			free(file);
+			return 1;
+		}
+		if (strchr(cre_folders, ',')) {
+		char* folders = strtok(cre_folders, ",");
+		while (folders != NULL) {
+			folder_file_handler(&fs, folders, fs.movement_parent);
+			folders = strtok(NULL, ",");
+		}
+		} else {
+			fs.movement_parent = 0;
+			folder_file_handler(&fs, cre_folders, fs.movement_parent);
+		}
+		free(cre_folders);
+
+		if (gzip == 1) {
+			int size = strlen("gzip ") + strlen(file) + 1;
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "gzip %s", file);
+			system(full_command);
+			free(full_command);
+		} 
+		else if (xz == 1) {
+			int size = strlen("xz ") + strlen(file) + 1;
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "xz %s", file);
+			system(full_command);
+			free(full_command);
+
+		} 
+		else if (lz4 == 1) {
+			int size = strlen("lz4 ") + strlen(file) + 1;
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "lz4 %s", file);
+			system(full_command);
+			free(full_command);
+
+		}
+	
 	}
 
 	fclose(fs.img);
