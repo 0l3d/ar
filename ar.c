@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <limits.h>
 
 #define VERSION_INFO "v0.1"
 
@@ -21,12 +22,29 @@
 					 "For compressed files, specify the algorithm.\n" \
 					 "For example for extract: ar -ex test.arx.xz OR ar -eg test.arx.gz\nFor example for create: ar -xc files test.arx # out: test.arx.xz \n"  
 
-	int
-file_writer(LightFS * fs, char *file_name, char *folderpath)
+#define FS_HELP "AR archive manager for .ARX\n" \
+				"For CLI: -h\n" \
+				"Commands: \n" \
+				"ls	- list files/folders.\n" \
+				"cat - displays file contents. [filename]\n" \
+				"rm - remove file. [filename]\n" \
+				"rmdir - remove folder. [foldername]\n" \
+				"addfile - add new file. [filepath]\n" \
+				"addfolder - add new folder. [folderpath]\n" \
+				"extract - extract file/folder. [folder/filename]\n" \
+				"cd - change dir. [foldername]\n" \
+				"mkdir - create new dir. [foldername]\n" \
+				"new - create new file. [filename] [file contents]\n" \
+				"exit\n" \
+				"help\n" \
+				"version\n"
+
+int
+file_writer(LightFS * fs, char *file_name, int parent_offset)
 {
 	FILE           *fp = fopen(file_name, "rb");
 	if (!fp) {
-		perror("addfile failed");
+		perror("filewriter failed");
 		return 1;
 	}
 	fseek(fp, 0, SEEK_END);
@@ -45,48 +63,31 @@ file_writer(LightFS * fs, char *file_name, char *folderpath)
 	fread(buf, 1, size, fp);
 	fclose(fp);
 
-	char           *base = strrchr(file_name, '/');
-	base = base ? base + 1 : file_name;
-
-	int 		parent_offset;
-	if (folderpath && strlen(folderpath) == 0)
-		folderpath = NULL;
-
-	if (folderpath) {
-
-		if (strcmp(folderpath, "/") == 0) {
-			parent_offset = 0;
-			//root
-		} else {
-			parent_offset =
-				lfs_doffset(fs, folderpath, fs->movement_parent);
-		}
-
-	} else {
-		parent_offset = fs->movement_parent;
-	}
-
-	lfs_newfile(fs, base, buf, size, parent_offset);
+	lfs_newfile(fs, file_name, buf, size, parent_offset);
 
 	free(buf);
 	return 0;
 }
 
 
-
-//DIRENT OUTPUT
-// TYPE 8->FILE
-// TYPE 4->FOLDER
 void
-folder_file_handler(LightFS * fs, char *folderpath, int offset)
+folder_file_handler(LightFS * fs, char *folderpath, int parent_offset)
 {
-	lfs_newdir(fs, folderpath, offset);
-
 	DIR            *dirp = opendir(folderpath);
 	if (!dirp) {
 		perror("opendir");
 		return;
 	}
+	
+	char old_dir[PATH_MAX];
+	if (!getcwd(old_dir, sizeof(old_dir))) {
+		perror("getcwd olddir");
+		return;
+	}
+	int curr_off = fs->movement_parent;
+	lfs_newdir(fs, folderpath, fs->movement_parent);
+	lfs_cd(fs, folderpath);
+	chdir(folderpath);
 	struct dirent  *dp;
 	while ((dp = readdir(dirp)) != NULL) {
 
@@ -94,20 +95,14 @@ folder_file_handler(LightFS * fs, char *folderpath, int offset)
 		    strcmp(dp->d_name, "..") == 0)
 			continue;
 
-		char 		path     [1024];
-		snprintf(path, sizeof(path), "%s/%s",
-			 folderpath, dp->d_name);
 		if (dp->d_type == DT_DIR) {
-			folder_file_handler(
-					    fs,
-					    path,
-					 lfs_doffset(fs, folderpath, offset)
-				);
+			folder_file_handler(fs, dp->d_name, fs->movement_parent);
 		} else {
-			file_writer(fs, path, folderpath);
+			file_writer(fs, dp->d_name, fs->movement_parent);
 		}
 	}
-
+	fs->movement_parent = curr_off;
+	chdir(old_dir);
 	closedir(dirp);
 }
 
@@ -141,6 +136,12 @@ fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
 	int curr_off = fs->movement_parent;
 	 	int 	dofset = lfs_doffset(fs, name, parent_offset);
 	 		int fofset = lfs_foffset(fs, name, parent_offset);
+	char old_dir[PATH_MAX];
+	if (!getcwd(old_dir, sizeof(old_dir))) {
+		perror("getcwd olddir");
+		return;
+	}
+
 	if (dofset != -1) {
 		mkdir(name, 0755);
 		lfs_cd(fs, name);
@@ -159,9 +160,11 @@ fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
 	}
 	lfs_free_list(&f);
 	fs->movement_parent = curr_off;
+	chdir(old_dir);
 }
 
 void cli_extracter(LightFS *fs, int parent_offset) {
+	int curr_off = fs->movement_parent;
 	fs->movement_parent = parent_offset;
 	ListFF 		f;
 	lfs_list(fs, &f);
@@ -175,6 +178,7 @@ void cli_extracter(LightFS *fs, int parent_offset) {
 		cli_extracter(fs, f.dir[i]->meta.offset);
 	}
 	lfs_free_list(&f);
+	fs->movement_parent = curr_off;
 }
 
 int
@@ -247,6 +251,7 @@ main(int argc, char **argv)
 	}
 
 	if (nav == 1 && exr != 1 && cre != 1) {
+		printf("type help for help\n");
 	int 		loop = 1;
 	while (loop) {
 		char 		pwdout   [256];
@@ -274,6 +279,10 @@ main(int argc, char **argv)
 				}
 			}
 			lfs_free_list(&f);
+		} else if (strcmp(command, "help") == 0) {
+			printf("%s\n", FS_HELP);
+		} else if (strcmp(command, "version") == 0) {
+			printf("ar version is %s\n", VERSION_INFO);
 		} else if (strcmp(command, "addfile") == 0) {
 
 			char           *token = strtok(NULL, " ");
@@ -296,7 +305,7 @@ main(int argc, char **argv)
 					return 1;
 				}
 			}
-			file_writer(&fs, file_name, folderpath);
+			file_writer(&fs, file_name, fs.movement_parent);
 
 			free(folderpath);
 			free(file_name);
@@ -352,7 +361,7 @@ main(int argc, char **argv)
 		} else if (strcmp(command, "rmdir") == 0) {
 			char           *name = strtok(NULL, " ");
 			if (name) {
-				int 		offset = lfs_doffset(&fs, "liblightfss", fs.movement_parent);
+				int 		offset = lfs_doffset(&fs, name, fs.movement_parent);
 				if (offset != -1) {
 					lfs_rmdir(&fs, name);
 				}
