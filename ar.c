@@ -164,21 +164,16 @@ fs_file_folder_handler(LightFS * fs, char *name, int parent_offset)
 }
 
 void cli_extracter(LightFS *fs, int parent_offset) {
-	int curr_off = fs->movement_parent;
-	fs->movement_parent = parent_offset;
+
 	ListFF 		f;
 	lfs_list(fs, &f);
 	for (int i = 0; i < f.filescount; i++) {
-		file_extracter(fs, f.file[i]->name, fs->movement_parent);
+		file_extracter(fs, f.file[i]->name, parent_offset);
 	}
 	for (int i = 0; i < f.folderscount; i++) {
-		lfs_cd(fs, f.dir[i]->name);
-		mkdir(f.dir[i]->name, 0755);
-		chdir(f.dir[i]->name);
-		cli_extracter(fs, f.dir[i]->meta.offset);
+		fs_file_folder_handler(fs, f.dir[i]->name, parent_offset);
 	}
 	lfs_free_list(&f);
-	fs->movement_parent = curr_off;
 }
 
 int
@@ -223,6 +218,7 @@ main(int argc, char **argv)
 			cre = 1;
 			cre_folders = strdup(optarg);
 			break;
+
 		default:
 			break;
 		}
@@ -237,10 +233,46 @@ main(int argc, char **argv)
 
 	fs.movement_parent = 0;
 	fs.old_parent = 0;
+
+	
 	if (!file) {
 		printf("-h for help.\n");
 		return 1;
 	}
+	if (exr == 1 || nav == 1) {
+	if (strstr(file, "xz") || strstr(file, "gz") || strstr(file, "lz4")) {
+		if (gzip == 1) {
+			int size = strlen("gzip ") + strlen(" -d ") + strlen(file);
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "gzip -d %s", file);
+			system(full_command);
+			free(full_command);
+		} 
+		else if (xz == 1) {
+			int size = strlen("xz ") + strlen(" -d ") + strlen(file);
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "xz -d %s", file);
+			system(full_command);
+			free(full_command);
+
+		} 
+		else if (lz4 == 1) {
+			int size = strlen("lz4 ") + strlen(" -d ") + strlen(file);
+			char *full_command = malloc(size);
+			snprintf(full_command,  size, "lz4 -d %s", file);
+			system(full_command);
+			free(full_command);
+
+		}
+
+				char *last = strrchr(file, '.');
+
+		if (last != NULL) {
+			*last = '\0';
+		}
+	}
+	}
+
 	fs.img = fopen(file, "r+b");
 	if (!fs.img) {
 		fs.img = fopen(file, "w+b");
@@ -383,29 +415,6 @@ main(int argc, char **argv)
 	
 	if (nav != 1 && exr == 1) {
 		printf("extracting...\n");
-		if (gzip == 1) {
-			int size = strlen("gzip ") + strlen(" -d ") + strlen(file);
-			char *full_command = malloc(size);
-			snprintf(full_command,  size, "gzip -d %s", file);
-			system(full_command);
-			free(full_command);
-		} 
-		else if (xz == 1) {
-			int size = strlen("xz ") + strlen(" -d ") + strlen(file);
-			char *full_command = malloc(size);
-			snprintf(full_command,  size, "xz -d %s", file);
-			system(full_command);
-			free(full_command);
-
-		} 
-		else if (lz4 == 1) {
-			int size = strlen("lz4 ") + strlen(" -d ") + strlen(file);
-			char *full_command = malloc(size);
-			snprintf(full_command,  size, "lz4 -d %s", file);
-			system(full_command);
-			free(full_command);
-
-		}
 		cli_extracter(&fs, 0);
 	}
 	
@@ -418,6 +427,7 @@ main(int argc, char **argv)
 		}
 		if (strchr(cre_folders, ',')) {
 		char* folders = strtok(cre_folders, ",");
+
 		while (folders != NULL) {
 			folder_file_handler(&fs, folders, fs.movement_parent);
 			folders = strtok(NULL, ",");
