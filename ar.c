@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <limits.h>
 
-#define VERSION_INFO "v0.1"
+#define VERSION_INFO "v1.1"
 
 #define HELP_MESSAGE "AR archive manager for .arx. \n" \
 					 "Usage: ar [options][options arguments] <file>.arx.<compression algorithm>\n" \
