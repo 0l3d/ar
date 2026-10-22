@@ -1,7 +1,7 @@
 /*
  * lightfs
- * Copyright (c) 2026 oled
- * https://git.sr.ht/~oled/lightfs
+ * Copyright (c) 2026 0l3d
+ * https://github.com/0l3d/lightfs
  *
  * Licensed under the GNU General Public License v3 (GPL-3.0)
  */
