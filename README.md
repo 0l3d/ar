@@ -9,7 +9,7 @@ Ar is archive manager/format for .ARX (Achive X) files.
   
 # Usage
 ```bash
-git clone https://git.sr.ht/~oled/ar
+git clone https://github.com/0l3d/ar.git
 cd ar
 make
 ./ar -h
@@ -30,4 +30,4 @@ make
 **tar** doesnt allow real-time navigate inside an archive like a file system or does it support deleting or adding files without extraction.  
   
 # Author 
-Created by **oled**.
+Created by **0l3d**.
